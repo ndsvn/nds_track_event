@@ -1,0 +1,26 @@
+name: nds_track_event
+description: A robust Flutter SDK for event tracking with offline support, retry logic, and batch sending.
+version: 1.0.0
+homepage: https://github.com/yourusername/nds_track_event
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  http: ^1.1.0
+  connectivity_plus: ^5.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  mockito: ^5.4.4
+  build_runner: ^2.4.7
+
+flutter:
+
