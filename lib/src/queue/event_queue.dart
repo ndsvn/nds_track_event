@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'package:flutter/foundation.dart';
+import 'package:nds_track_event/nds_track_event.dart';
 import '../models/event.dart';
 
 /// Thread-safe FIFO queue for events
@@ -68,7 +69,8 @@ class EventQueue {
 
   /// Remove and return up to [count] events from the queue
   /// Returns a list of events (may be less than count if queue doesn't have enough)
-  List<Event> dequeueBatch(int count) {
+  List<Event> dequeueBatch( TrackerConfig config) {
+    final count = config.maxBatchSize;
     if (_queue.isEmpty || count <= 0) {
       return [];
     }
@@ -77,7 +79,13 @@ class EventQueue {
     final batch = <Event>[];
 
     for (int i = 0; i < batchSize; i++) {
-      batch.add(_queue.removeFirst());
+      final event = _queue.removeFirst();
+      event.retryQueue += 1;
+      if(event.retryQueue >= config.maxTotalQueueSendRetries) {
+        onEventDropped?.call(event);
+        continue;
+      }
+      batch.add(event);
     }
 
     _sizeNotifier.value = _queue.length;

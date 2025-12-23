@@ -9,7 +9,9 @@ class TrackerConfig {
     this.autoFlushThreshold = 100,
     this.offlineStorageEnabled = true,
     this.debug = false,
-    this.maxRetries = 3,
+    this.maxSendRetries = 3,
+    this.maxTotalQueueSendRetries = 100,
+    this.maxTotalSendRetries = 600,
     this.initialRetryDelayMs = 500,
     this.maxEventNameLength = 256,
     this.httpTimeoutSeconds = 60,
@@ -41,7 +43,13 @@ class TrackerConfig {
   final bool debug;
 
   /// Maximum retry attempts for failed requests (default: 3)
-  final int maxRetries;
+  final int maxSendRetries;
+
+  /// Maximum total queue send retries (default: 100)
+  final int maxTotalQueueSendRetries;
+
+  /// Maximum total send retries (default: 600)
+  final int maxTotalSendRetries;
 
   /// Initial retry delay in milliseconds (default: 500ms)
   final int initialRetryDelayMs;
@@ -82,8 +90,8 @@ class TrackerConfig {
       throw ArgumentError('autoFlushThreshold must be <= maxQueueSize');
     }
 
-    if (maxRetries < 0) {
-      throw ArgumentError('maxRetries must be >= 0');
+    if (maxSendRetries < 0) {
+      throw ArgumentError('maxSendRetries must be >= 0');
     }
 
     if (initialRetryDelayMs < 0) {
@@ -97,6 +105,12 @@ class TrackerConfig {
     if (httpTimeoutSeconds < 1) {
       throw ArgumentError('httpTimeoutSeconds must be at least 1');
     }
+    if (maxTotalSendRetries < 0) {
+      throw ArgumentError('maxTotalSendRetries must be >= 0');
+    }
+    if (maxTotalQueueSendRetries < 0) {
+      throw ArgumentError('maxTotalQueueSendRetries must be >= 0');
+    }
   }
 
   /// Create a copy of this config with updated fields
@@ -109,7 +123,9 @@ class TrackerConfig {
     int? autoFlushThreshold,
     bool? offlineStorageEnabled,
     bool? debug,
-    int? maxRetries,
+    int? maxSendRetries,
+    int? maxTotalQueueSendRetries,
+    int? maxTotalSendRetries,
     int? initialRetryDelayMs,
     int? maxEventNameLength,
     int? httpTimeoutSeconds,
@@ -124,7 +140,9 @@ class TrackerConfig {
       offlineStorageEnabled:
           offlineStorageEnabled ?? this.offlineStorageEnabled,
       debug: debug ?? this.debug,
-      maxRetries: maxRetries ?? this.maxRetries,
+      maxSendRetries: maxSendRetries ?? this.maxSendRetries,
+      maxTotalQueueSendRetries: maxTotalQueueSendRetries ?? this.maxTotalQueueSendRetries,
+      maxTotalSendRetries: maxTotalSendRetries ?? this.maxTotalSendRetries,
       initialRetryDelayMs: initialRetryDelayMs ?? this.initialRetryDelayMs,
       maxEventNameLength: maxEventNameLength ?? this.maxEventNameLength,
       httpTimeoutSeconds: httpTimeoutSeconds ?? this.httpTimeoutSeconds,

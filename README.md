@@ -84,7 +84,7 @@ await tracker.dispose();
 | `maxQueueSize` | int | 5000 | Maximum in-memory queue size |
 | `offlineStorageEnabled` | bool | true | Enable SQLite offline storage |
 | `debug` | bool | false | Enable debug logging |
-| `maxRetries` | int | 3 | Maximum retry attempts |
+| `maxSendRetries` | int | 3 | Maximum retry attempts |
 | `initialRetryDelayMs` | int | 500 | Initial retry delay |
 
 ## API Reference
@@ -101,7 +101,7 @@ EventTracker({
   int maxQueueSize = 5000,
   bool offlineStorageEnabled = true,
   bool debug = false,
-  int maxRetries = 3,
+  int maxSendRetries = 3,
   int initialRetryDelayMs = 500,
 })
 ```

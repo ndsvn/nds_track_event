@@ -9,8 +9,28 @@ class Event {
     this.userId,
     required this.timestamp,
     this.retryCount = 0,
+    this.retryQueue = 0,
     this.status = EventStatus.pending,
   });
+
+  /// Create an Event from JSON map
+  factory Event.fromJson(Map<String, dynamic> json) {
+    return Event(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      properties: json['properties'] is String
+          ? jsonDecode(json['properties'] as String) as Map<String, dynamic>
+          : json['properties'] as Map<String, dynamic>,
+      userId: json['userId'] as String?,
+      timestamp: json['timestamp'] as int,
+      retryCount: json['retryCount'] as int? ?? 0,
+      retryQueue: json['retryQueue'] as int? ?? 0,
+      status: EventStatus.values.firstWhere(
+        (e) => e.toString() == 'EventStatus.${json['status']}',
+        orElse: () => EventStatus.pending,
+      ),
+    );
+  }
 
   /// Unique identifier for the event (UUID)
   final String id;
@@ -30,26 +50,11 @@ class Event {
   /// Number of retry attempts for this event
   int retryCount;
 
+  /// Number of retry attempts for this event in the queue
+  int retryQueue;
+
   /// Status of the event
   EventStatus status;
-
-  /// Create an Event from JSON map
-  factory Event.fromJson(Map<String, dynamic> json) {
-    return Event(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      properties: json['properties'] is String
-          ? jsonDecode(json['properties'] as String) as Map<String, dynamic>
-          : json['properties'] as Map<String, dynamic>,
-      userId: json['userId'] as String?,
-      timestamp: json['timestamp'] as int,
-      retryCount: json['retryCount'] as int? ?? 0,
-      status: EventStatus.values.firstWhere(
-        (e) => e.toString() == 'EventStatus.${json['status']}',
-        orElse: () => EventStatus.pending,
-      ),
-    );
-  }
 
   /// Convert Event to JSON map
   Map<String, dynamic> toJson() {
@@ -60,6 +65,7 @@ class Event {
       'userId': userId,
       'timestamp': timestamp,
       'retryCount': retryCount,
+      'retryQueue': retryQueue,
       'status': status.toString().split('.').last,
     };
   }
@@ -79,7 +85,7 @@ class Event {
 
   /// Convert Event to JSON map for API submission
   Map<String, dynamic> toApiJson() {
-    if(userId != null) {
+    if(userId == null) {
       return {
       ...properties,
       'EventName': name,

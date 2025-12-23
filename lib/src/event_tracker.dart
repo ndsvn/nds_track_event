@@ -22,7 +22,9 @@ class EventTracker {
     int autoFlushThreshold = 100,
     bool offlineStorageEnabled = true,
     bool debug = false,
-    int maxRetries = 3,
+    int maxSendRetries = 3,
+    int maxTotalQueueSendRetries = 100,
+    int maxTotalSendRetries = 600,
     int initialRetryDelayMs = 500,
     int httpTimeoutSeconds = 60,
   }) : config = TrackerConfig(
@@ -34,7 +36,9 @@ class EventTracker {
           autoFlushThreshold: autoFlushThreshold,
           offlineStorageEnabled: offlineStorageEnabled,
           debug: debug,
-          maxRetries: maxRetries,
+          maxSendRetries: maxSendRetries,
+          maxTotalQueueSendRetries: maxTotalQueueSendRetries,
+          maxTotalSendRetries: maxTotalSendRetries,
           initialRetryDelayMs: initialRetryDelayMs,
           httpTimeoutSeconds: httpTimeoutSeconds,
         ) {
@@ -290,7 +294,7 @@ class EventTracker {
       // Keep flushing batches until queue is empty
       while (!_queue.isEmpty && _isOnline) {
         // Get batch of events from queue
-        final batch = _queue.dequeueBatch(config.maxBatchSize);
+        final batch = _queue.dequeueBatch(config);
         if (batch.isEmpty) {
           break;
         }
@@ -315,7 +319,10 @@ class EventTracker {
 
           // Save failed events to storage if enabled
           if (config.offlineStorageEnabled) {
-            await _storage.saveEvents(batch);
+            List<Event> failedEvents = batch.where((e) => e.retryCount >= config.maxTotalSendRetries).toList();
+            List<Event> notFailedEvents = batch.where((e) => e.retryCount < config.maxTotalSendRetries).toList();
+            await _storage.saveEvents(notFailedEvents);
+            await _storage.deleteEvents(failedEvents.map((e) => e.id).toList());
           }
 
           _logger.error(

@@ -29,7 +29,7 @@ class BatchSender {
     int attempt = 0;
     TrackerNetworkException? lastError;
 
-    while (attempt <= config.maxRetries) {
+    while (attempt <= config.maxSendRetries) {
       try {
         // Add delay for retry attempts (exponential backoff)
         if (attempt > 0) {
@@ -65,8 +65,10 @@ class BatchSender {
         }
 
         // Update retry count for events
-        for (final event in events) {
-          event.retryCount = attempt + 1;
+        if (attempt >= config.maxSendRetries) {
+          for (final event in events) {
+            event.retryCount += 1;
+          }
         }
 
         attempt++;
@@ -78,7 +80,8 @@ class BatchSender {
     }
 
     // All retries exhausted
-    logger.error('All ${config.maxRetries} retry attempts failed for batch');
+    logger
+        .error('All ${config.maxSendRetries} retry attempts failed for batch');
     // _markEventsFailed(events);
 
     if (lastError != null) {
@@ -121,7 +124,7 @@ class BatchSender {
   /// Calculate total delay for all retry attempts (for testing/estimation)
   int calculateTotalRetryDelay() {
     int totalDelay = 0;
-    for (int i = 1; i <= config.maxRetries; i++) {
+    for (int i = 1; i <= config.maxSendRetries; i++) {
       totalDelay += _calculateBackoffDelay(i);
     }
     return totalDelay;
