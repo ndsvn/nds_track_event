@@ -24,6 +24,7 @@ class EventTracker {
     bool debug = false,
     int maxRetries = 3,
     int initialRetryDelayMs = 500,
+    int httpTimeoutSeconds = 60,
   }) : config = TrackerConfig(
           apiKey: apiKey,
           endpoint: endpoint,
@@ -35,6 +36,7 @@ class EventTracker {
           debug: debug,
           maxRetries: maxRetries,
           initialRetryDelayMs: initialRetryDelayMs,
+          httpTimeoutSeconds: httpTimeoutSeconds,
         ) {
     _initialize();
   }

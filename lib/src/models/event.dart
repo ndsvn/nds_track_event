@@ -79,12 +79,16 @@ class Event {
 
   /// Convert Event to JSON map for API submission
   Map<String, dynamic> toApiJson() {
+    if(userId != null) {
+      return {
+      ...properties,
+      'EventName': name,
+    };
+    }
     return {
-      'id': id,
-      'name': name,
-      'properties': properties,
-      'userId': userId,
-      'timestamp': timestamp,
+      ...properties,
+      'UserId': userId,
+      'EventName': name,
     };
   }
 

@@ -12,7 +12,7 @@ class TrackerConfig {
     this.maxRetries = 3,
     this.initialRetryDelayMs = 500,
     this.maxEventNameLength = 256,
-    this.httpTimeoutSeconds = 30,
+    this.httpTimeoutSeconds = 60,
   });
 
   /// API key for authentication
