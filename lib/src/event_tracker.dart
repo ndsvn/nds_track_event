@@ -13,7 +13,6 @@ import 'utils/validators.dart';
 import 'utils/uuid_generator.dart';
 
 class EventTracker {
-
   EventTracker({
     required String apiKey,
     required String endpoint,
@@ -48,7 +47,7 @@ class EventTracker {
   late final BatchSender _batchSender;
 
   Timer? _flushTimer;
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   bool _isDisposed = false;
 
@@ -107,7 +106,8 @@ class EventTracker {
       _setupLifecycleListener();
       _logger.info('EventTracker initialized successfully');
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize EventTracker', error: e, stackTrace: stackTrace);
+      _logger.error('Failed to initialize EventTracker',
+          error: e, stackTrace: stackTrace);
     }
   }
 
@@ -173,7 +173,8 @@ class EventTracker {
 
         // Check if queue size exceeds threshold for auto-flush
         if (_queue.size >= config.autoFlushThreshold) {
-          _logger.debug('Queue size (${_queue.size}) exceeds threshold (${config.autoFlushThreshold}), triggering auto-flush');
+          _logger.debug(
+              'Queue size (${_queue.size}) exceeds threshold (${config.autoFlushThreshold}), triggering auto-flush');
           _performFlush();
         }
       }
@@ -218,10 +219,8 @@ class EventTracker {
       _logger.debug('flush() completed in ${stopwatch.elapsedMilliseconds}ms');
     } catch (e, stackTrace) {
       _logger.error('Error during flush', error: e, stackTrace: stackTrace);
-     
     }
   }
-
 
   /// Dispose and cleanup resources
   Future<void> dispose() async {
@@ -268,7 +267,8 @@ class EventTracker {
       Duration(milliseconds: config.flushIntervalMs),
       (_) => _performFlush(),
     );
-    _logger.debug('Flush timer started (interval: ${config.flushIntervalMs}ms)');
+    _logger
+        .debug('Flush timer started (interval: ${config.flushIntervalMs}ms)');
   }
 
   /// Perform the actual flush operation
@@ -281,7 +281,7 @@ class EventTracker {
     try {
       final totalEvents = _queue.size;
       _logger.debug('Starting flush for $totalEvents events');
-      
+
       int successCount = 0;
       int failCount = 0;
 
@@ -307,7 +307,7 @@ class EventTracker {
           _logger.debug('Successfully sent batch of ${batch.length} events');
         } else {
           failCount += batch.length;
-          
+
           // Requeue failed events
           _queue.requeueAllToFront(batch);
 
@@ -316,8 +316,9 @@ class EventTracker {
             await _storage.saveEvents(batch);
           }
 
-          _logger.error('Failed to flush batch of ${batch.length} events, requeued');
-          
+          _logger.error(
+              'Failed to flush batch of ${batch.length} events, requeued');
+
           // Stop flushing on first failure to avoid hammering the server
           break;
         }
@@ -326,9 +327,10 @@ class EventTracker {
       if (successCount > 0) {
         _logger.info('Flush completed: $successCount events sent successfully');
       }
-      
+
       if (failCount > 0) {
-        _logger.warning('Flush completed with failures: $failCount events failed');
+        _logger
+            .warning('Flush completed with failures: $failCount events failed');
       }
     } catch (e, stackTrace) {
       _logger.error('Error during flush', error: e, stackTrace: stackTrace);
@@ -344,26 +346,30 @@ class EventTracker {
         _logger.info('Loaded $added pending events from storage');
       }
     } catch (e, stackTrace) {
-      _logger.error('Error loading pending events', error: e, stackTrace: stackTrace);
+      _logger.error('Error loading pending events',
+          error: e, stackTrace: stackTrace);
     }
   }
 
   /// Start monitoring network connectivity
-void _startConnectivityMonitoring() {
-  _connectivitySubscription = Connectivity()
-      .onConnectivityChanged
-      .listen((ConnectivityResult result) {
-    final wasOnline = _isOnline;
-    _isOnline = result != ConnectivityResult.none;
+  void _startConnectivityMonitoring() {
+    _connectivitySubscription = Connectivity()
+        .onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      final wasOnline = _isOnline;
+      _isOnline = results.isNotEmpty &&
+          results.any((r) => r != ConnectivityResult.none);
+      // _isOnline = result != ConnectivityResult.none;
 
-    _logger.debug('Connectivity changed: online=$_isOnline');
+      _logger.debug('Connectivity changed: online=$_isOnline');
 
-    if (!wasOnline && _isOnline) {
-      _logger.info('Back online, triggering flush');
-      _performFlush();
-    }
-  });
-}
+      if (!wasOnline && _isOnline) {
+        _logger.info('Back online, triggering flush');
+        _performFlush();
+      }
+    });
+  }
+
   /// Setup app lifecycle listener
   void _setupLifecycleListener() {
     WidgetsBinding.instance.addObserver(_LifecycleObserver(this));
@@ -372,7 +378,6 @@ void _startConnectivityMonitoring() {
 
 /// App lifecycle observer to handle background/foreground transitions
 class _LifecycleObserver extends WidgetsBindingObserver {
-
   _LifecycleObserver(this.tracker);
   final EventTracker tracker;
 
@@ -392,4 +397,3 @@ class _LifecycleObserver extends WidgetsBindingObserver {
     }
   }
 }
-
