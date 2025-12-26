@@ -277,27 +277,40 @@ class EventTracker {
         .debug('Flush timer started (interval: ${config.flushIntervalMs}ms)');
   }
 
-  /// Perform the actual flush operation
-  /// This will send ALL pending events in batches of maxBatchSize
   Future<void> _performFlush() async {
     if (_queue.isEmpty || !_isOnline) {
       return;
     }
 
     try {
-      final totalEvents = _queue.size;
-      _logger.debug('Starting flush for $totalEvents events');
+      final allEvents = <Event>[];
+      while (!_queue.isEmpty) {
+        final batch = _queue.dequeueBatch(config);
+        if (batch.isEmpty) break;
+        allEvents.addAll(batch);
+      }
+
+      if (allEvents.isEmpty) {
+        return;
+      }
+
+      _logger.debug('Starting flush for ${allEvents.length} events');
 
       int successCount = 0;
-      int failCount = 0;
+      final failedEvents = <Event>[];
 
-      // Keep flushing batches until queue is empty
-      while (!_queue.isEmpty && _isOnline) {
-        // Get batch of events from queue
-        final batch = _queue.dequeueBatch(config);
-        if (batch.isEmpty) {
+      // Process events in batches
+      for (int i = 0; i < allEvents.length; i += config.maxBatchSize) {
+        if (!_isOnline) {
+          failedEvents.addAll(allEvents.skip(i));
           break;
         }
+
+        final end = (i + config.maxBatchSize < allEvents.length)
+            ? i + config.maxBatchSize
+            : allEvents.length;
+        final batch = allEvents.sublist(i, end);
+
         // Send batch
         final success = await _batchSender.sendBatch(batch);
 
@@ -312,24 +325,49 @@ class EventTracker {
 
           _logger.debug('Successfully sent batch of ${batch.length} events');
         } else {
-          failCount += batch.length;
+          // Collect failed events to requeue later
+          failedEvents.addAll(batch);
 
-          // Requeue failed events
-          _queue.requeueAllToFront(batch);
+          _logger.error('Failed to send batch of ${batch.length} events');
+        }
+      }
 
-          // Save failed events to storage if enabled
+      // After processing all batches, requeue failed events
+      if (failedEvents.isNotEmpty) {
+        // Separate events that exceeded max retries
+        final eventsToRequeue = <Event>[];
+        final eventsToDiscard = <Event>[];
+
+        for (final event in failedEvents) {
+          if (event.retryCount >= config.maxTotalSendRetries) {
+            eventsToDiscard.add(event);
+          } else {
+            eventsToRequeue.add(event);
+          }
+        }
+
+        // Requeue events that haven't exceeded max retries
+        if (eventsToRequeue.isNotEmpty) {
+          _queue.requeueAllToFront(eventsToRequeue);
+
+          // Save to storage if enabled
           if (config.offlineStorageEnabled) {
-            List<Event> failedEvents = batch.where((e) => e.retryCount >= config.maxTotalSendRetries).toList();
-            List<Event> notFailedEvents = batch.where((e) => e.retryCount < config.maxTotalSendRetries).toList();
-            await _storage.saveEvents(notFailedEvents);
-            await _storage.deleteEvents(failedEvents.map((e) => e.id).toList());
+            await _storage.saveEvents(eventsToRequeue);
           }
 
-          _logger.error(
-              'Failed to flush batch of ${batch.length} events, requeued');
+          _logger.warning(
+              '${eventsToRequeue.length} events requeued for retry');
+        }
 
-          // Stop flushing on first failure to avoid hammering the server
-          break;
+        // Discard events that exceeded max retries
+        if (eventsToDiscard.isNotEmpty) {
+          if (config.offlineStorageEnabled) {
+            await _storage
+                .deleteEvents(eventsToDiscard.map((e) => e.id).toList());
+          }
+
+          _logger.warning(
+              '${eventsToDiscard.length} events discarded (exceeded max retries)');
         }
       }
 
@@ -337,9 +375,9 @@ class EventTracker {
         _logger.info('Flush completed: $successCount events sent successfully');
       }
 
-      if (failCount > 0) {
-        _logger
-            .warning('Flush completed with failures: $failCount events failed');
+      if (failedEvents.isNotEmpty) {
+        _logger.warning(
+            'Flush completed with failures: ${failedEvents.length} events failed');
       }
     } catch (e, stackTrace) {
       _logger.error('Error during flush', error: e, stackTrace: stackTrace);
