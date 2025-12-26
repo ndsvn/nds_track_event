@@ -281,66 +281,43 @@ class EventTracker {
     if (_queue.isEmpty || !_isOnline) {
       return;
     }
-
     try {
-      final allEvents = <Event>[];
+      final batches = <List<Event>>[];
       while (!_queue.isEmpty) {
         final batch = _queue.dequeueBatch(config);
         if (batch.isEmpty) break;
-        allEvents.addAll(batch);
+        batches.add(batch);
       }
 
-      if (allEvents.isEmpty) {
+      if (batches.isEmpty) {
         return;
       }
-
-      _logger.debug('Starting flush for ${allEvents.length} events');
-
-      int successCount = 0;
+    
       final failedEvents = <Event>[];
-
-      // Process events in batches
-      for (int i = 0; i < allEvents.length; i += config.maxBatchSize) {
+      // Process batches sequentially
+      for (final batch in batches) {
         if (!_isOnline) {
-          failedEvents.addAll(allEvents.skip(i));
-          break;
-        }
-
-        final end = (i + config.maxBatchSize < allEvents.length)
-            ? i + config.maxBatchSize
-            : allEvents.length;
-        final batch = allEvents.sublist(i, end);
-
-        // Send batch
-        final success = await _batchSender.sendBatch(batch);
-
-        if (success) {
-          successCount += batch.length;
-
-          // Delete from storage if enabled
-          if (config.offlineStorageEnabled) {
-            final eventIds = batch.map((e) => e.id).toList();
-            await _storage.deleteEvents(eventIds);
-          }
-
-          _logger.debug('Successfully sent batch of ${batch.length} events');
-        } else {
-          // Collect failed events to requeue later
           failedEvents.addAll(batch);
-
-          _logger.error('Failed to send batch of ${batch.length} events');
+          continue;
+        }
+        final success = await _batchSender.sendBatch(batch);
+        if (success) {
+          final successEvents = batch.map((e) => e.id).toList();
+          if (successEvents.isNotEmpty && config.offlineStorageEnabled) {
+            await _storage.deleteEvents(successEvents);
+          }
+        } else {
+          failedEvents.addAll(batch);
         }
       }
-
-      // After processing all batches, requeue failed events
+      // Process failed events
       if (failedEvents.isNotEmpty) {
-        // Separate events that exceeded max retries
         final eventsToRequeue = <Event>[];
-        final eventsToDiscard = <Event>[];
+        final eventsToDiscardIds = <String>[];
 
         for (final event in failedEvents) {
           if (event.retryCount >= config.maxTotalSendRetries) {
-            eventsToDiscard.add(event);
+            eventsToDiscardIds.add(event.id);
           } else {
             eventsToRequeue.add(event);
           }
@@ -350,7 +327,6 @@ class EventTracker {
         if (eventsToRequeue.isNotEmpty) {
           _queue.requeueAllToFront(eventsToRequeue);
 
-          // Save to storage if enabled
           if (config.offlineStorageEnabled) {
             await _storage.saveEvents(eventsToRequeue);
           }
@@ -360,20 +336,17 @@ class EventTracker {
         }
 
         // Discard events that exceeded max retries
-        if (eventsToDiscard.isNotEmpty) {
+        if (eventsToDiscardIds.isNotEmpty) {
           if (config.offlineStorageEnabled) {
-            await _storage
-                .deleteEvents(eventsToDiscard.map((e) => e.id).toList());
+            await _storage.deleteEvents(eventsToDiscardIds);
           }
 
           _logger.warning(
-              '${eventsToDiscard.length} events discarded (exceeded max retries)');
+              '${eventsToDiscardIds.length} events discarded (exceeded max retries)');
         }
       }
 
-      if (successCount > 0) {
-        _logger.info('Flush completed: $successCount events sent successfully');
-      }
+
 
       if (failedEvents.isNotEmpty) {
         _logger.warning(
